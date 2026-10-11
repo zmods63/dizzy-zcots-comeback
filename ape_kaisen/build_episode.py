@@ -17,6 +17,7 @@ import bpy  # noqa: E402
 
 import build_sets as BS  # noqa: E402
 from ak import episode as E  # noqa: E402
+from ak import pack as P  # noqa: E402
 from ak import render as R  # noqa: E402
 
 PARTS_DIR = os.path.join(HERE, "parts")
@@ -38,6 +39,8 @@ def build_part(key):
     os.makedirs(PARTS_DIR, exist_ok=True)
     path = os.path.join(PARTS_DIR, f"ep1_{key}.blend")
     bpy.ops.file.pack_all()
+    P.slim()
+    R.viewport_camera()
     bpy.ops.wm.save_as_mainfile(filepath=path, compress=True)
     print("saved", path, round(os.path.getsize(path) / 1e6, 1), "MB")
     return path
@@ -76,8 +79,16 @@ def _set(obj, **kw):
                 pass
 
 
+def new_effect(sed, name, kind, channel, start, length):
+    """VSE effect strip: Blender 5 takes a length, 4.x an end frame."""
+    try:
+        return sed.strips.new_effect(name=name, type=kind, channel=channel, frame_start=start, length=length)
+    except TypeError:
+        return sed.strips.new_effect(name=name, type=kind, channel=channel, frame_start=start, frame_end=start + length)
+
+
 def text_strip(sed, name, text, channel, start, length, size, y, color=(1, 1, 1, 1), box=False):
-    t = sed.strips.new_effect(name=name, type="TEXT", channel=channel, frame_start=start, length=length)
+    t = new_effect(sed, name, "TEXT", channel, start, length)
     t.text = text
     _set(t, font_size=size, color=color, use_shadow=True, shadow_color=(0, 0, 0, 0.9), location=(0.5, y),
          alignment_x="CENTER", anchor_x="CENTER", anchor_y="BOTTOM", use_box=box, box_color=(0, 0, 0, 0.55),
@@ -87,13 +98,15 @@ def text_strip(sed, name, text, channel, start, length, size, y, color=(1, 1, 1,
 
 def assemble():
     """ape_kaisen_ep1.blend: both parts as scenes + the Edit scene that plays the episode."""
-    BS.fresh_file()
-    edit = bpy.context.scene
-    edit.name = "Edit"
+    # start from the school part so the file opens on the School scene (not the empty-looking edit)
+    bpy.ops.wm.open_mainfile(filepath=os.path.join(PARTS_DIR, "ep1_school.blend"))
     for key, (name, _, _) in PARTS.items():
+        if name in bpy.data.scenes:
+            continue
         path = os.path.join(PARTS_DIR, f"ep1_{key}.blend")
         with bpy.data.libraries.load(path, link=False) as (src, dst):
             dst.scenes = [name]
+    edit = bpy.data.scenes.new("Edit")
     edit.render.resolution_x, edit.render.resolution_y, edit.render.fps = 1920, 1080, 24
     sed = edit.sequence_editor_create()
     start = 1
@@ -101,7 +114,7 @@ def assemble():
     for i, (name, a, b) in enumerate(EDIT):
         if name == "TITLE":
             n = b - a
-            c = sed.strips.new_effect(name="Black", type="COLOR", channel=1, frame_start=start, length=n)
+            c = new_effect(sed, "Black", "COLOR", 1, start, n)
             c.color = (0.0, 0.0, 0.0)
             text_strip(sed, "Title", "APE KAISEN", 3, start + 6, n - 10, 150, 0.5, color=(0.95, 0.15, 0.2, 1))
             text_strip(sed, "Subtitle", "Episode 1  -  Ryomen Sukuna", 4, start + 18, n - 22, 52, 0.36)
@@ -140,8 +153,12 @@ def assemble():
     _set(edit.render.ffmpeg, format="MPEG4", codec="H264", constant_rate_factor="HIGH")
     edit.render.filepath = "//render/ape_kaisen_ep1.mp4"
     path = os.path.join(HERE, "ape_kaisen_ep1.blend")
+    bpy.ops.file.pack_all()
+    P.slim()                     # also merges the textures both parts share
+    R.viewport_camera()
     bpy.ops.wm.save_as_mainfile(filepath=path, compress=True)
-    print("saved", path, round(os.path.getsize(path) / 1e6, 1), "MB,", edit.frame_end, "frames")
+    print("saved", path, round(os.path.getsize(path) / 1e6, 1), "MB,", edit.frame_end, "frames,",
+          "Blender", bpy.app.version_string, "opens on", bpy.context.scene.name)
 
 
 if __name__ == "__main__":

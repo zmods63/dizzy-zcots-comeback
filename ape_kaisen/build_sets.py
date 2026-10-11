@@ -1,6 +1,6 @@
 """Build the two set files: ape_kaisen_school.blend and ape_kaisen_hospital.blend.
 
-Run:  python3 build_sets.py      (needs the `bpy` module, Blender 5.x)
+Run:  python3 build_sets.py      (needs the `bpy` module: Blender 4.5 LTS saves files every 4.5+ opens)
 Both files are self-contained (textures and fonts packed) and set up for EEVEE.
 """
 
@@ -17,6 +17,7 @@ from mathutils import Vector  # noqa: E402
 from ak import characters as CH  # noqa: E402
 from ak import hospital as HO  # noqa: E402
 from ak import motion as MO  # noqa: E402
+from ak import pack as P  # noqa: E402
 from ak import render as R  # noqa: E402
 from ak import school as S  # noqa: E402
 from ak import util as U  # noqa: E402
@@ -38,6 +39,8 @@ def finish(scene, path, exposure):
     scene.view_settings.exposure = exposure
     scene.frame_start, scene.frame_end = 1, 250
     bpy.ops.file.pack_all()
+    P.slim()
+    R.viewport_camera()
     bpy.ops.wm.save_as_mainfile(filepath=path, compress=True)
     print("saved", path, round(os.path.getsize(path) / 1e6, 1), "MB")
 

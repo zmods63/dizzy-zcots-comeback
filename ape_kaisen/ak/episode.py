@@ -343,8 +343,9 @@ def megumi_pole(ctx):
     meg.jump(d0 + 60, d0 + 92, (15.6, -37.6), apex=0.45, target_ground=0.0, crouch=6, land=8)
     meg.move(d0 + 92, d1, [(13.5, -30.5), (8.0, -22.0)], gait="gallop", stride=2.1, accel=8, decel=1)
     hold(meg, d1)
-    cam = camera(scene, "Cam_Pole", (20.5, -46.5, 1.6), top + Vector((0, 0, 0.4)), 30, cams)
-    drift(cam, p0, p1, (20.5, -46.5, 1.6), top + Vector((0, 0, 0.45)), (19.4, -45.8, 2.0), top + Vector((0, 0, 0.42)))
+    # low angle, close enough that he fills a fifth of the frame, the wires slicing past
+    cam = camera(scene, "Cam_Pole", (18.0, -44.2, 7.2), top + Vector((0, 0, 0.4)), 40, cams)
+    drift(cam, p0, p1, (18.0, -44.2, 7.2), top + Vector((0, 0, 0.42)), (17.3, -43.7, 7.7), top + Vector((0, 0, 0.4)))
     cut(scene, p0, cam)
     cam2 = camera(scene, "Cam_Drop", (6.5, -49.5, 2.2), (16.5, -40.5, 6.0), 24, cams)
     drift(cam2, d0, d1, (6.5, -49.5, 2.2), (16.5, -40.5, 6.0), (5.0, -48.5, 2.6), (13.0, -33.0, 2.0))

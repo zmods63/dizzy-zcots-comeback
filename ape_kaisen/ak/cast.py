@@ -142,6 +142,7 @@ def char_material(tag, tex):
     img.interpolation = "Closest"   # same crisp pixel look as the original material
     img.location = group.location
     nt.nodes.remove(group)
+    nt.nodes.active = img           # what Solid mode's Texture colour shows
     nt.links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
     for n in nt.nodes:
         if n.type == "TEX_IMAGE" and n.name != img.name:   # (node wrappers aren't identical objects)

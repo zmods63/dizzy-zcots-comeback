@@ -411,7 +411,10 @@ class Asset:
         if any(s.kind == "decal" for s in self.surfs):
             self._decal_uv(me)
         if bake_faces:
-            self._unwrap(ob, me, res)
+            # the UV layout is cached next to the textures: Blender versions unwrap differently
+            if not self._load_uv(me, key):
+                self._unwrap(ob, me, res)
+                self._save_uv(me, key)
             imgs = self._load_cache(key) or self._bake(ob, me, res, key)
         else:
             imgs = (None, None)
@@ -550,6 +553,34 @@ class Asset:
             uv[loops, 0] = u
             uv[loops, 1] = v
         uvl.data.foreach_set("uv", uv.ravel())
+
+    def _uv_path(self):
+        return os.path.join(BAKE_DIR, f"{self.name}_UV.npz")
+
+    @staticmethod
+    def _loop_verts(me):
+        lv = np.zeros(len(me.loops), np.int32)
+        me.loops.foreach_get("vertex_index", lv)
+        return lv
+
+    def _load_uv(self, me, key):
+        try:
+            d = np.load(self._uv_path())
+        except (OSError, ValueError):
+            return False
+        lv = self._loop_verts(me)
+        if str(d["key"]) != key or d["uv"].shape[0] != lv.shape[0] or not np.array_equal(d["lv"], lv):
+            return False
+        if not me.uv_layers:
+            me.uv_layers.new(name="UVMap")
+        me.uv_layers.active.data.foreach_set("uv", d["uv"].ravel())
+        return True
+
+    def _save_uv(self, me, key):
+        uv = np.zeros(len(me.loops) * 2, np.float32)
+        me.uv_layers.active.data.foreach_get("uv", uv)
+        os.makedirs(BAKE_DIR, exist_ok=True)
+        np.savez_compressed(self._uv_path(), key=key, uv=uv.reshape(-1, 2), lv=self._loop_verts(me))
 
     @staticmethod
     def _poly_surfs(me):
