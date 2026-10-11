@@ -1,0 +1,17 @@
+{
+  "name": "playfab-anticheat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PlayFab CloudScript (Azure Functions) anti-cheat: Play Integrity / Quest attestation, bans, shadowban lag, Photon room kicks, Discord alerts",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  }
+}
