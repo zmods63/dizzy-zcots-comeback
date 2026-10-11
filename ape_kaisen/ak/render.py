@@ -59,7 +59,10 @@ def setup(scene, preview=True, res=(1920, 1080), samples=None):
         ee = scene.eevee
         for attr, val in (("taa_render_samples", samples or 64), ("use_raytracing", True),
                           ("use_shadows", True), ("shadow_ray_count", 2), ("shadow_step_count", 8),
-                          ("use_fast_gi", True), ("fast_gi_method", "GLOBAL_ILLUMINATION")):
+                          ("use_fast_gi", True), ("fast_gi_method", "GLOBAL_ILLUMINATION"),
+                          ("volumetric_tile_size", "4"), ("volumetric_samples", 96), ("use_volume_custom_range", True),
+                          ("volumetric_start", 0.1), ("volumetric_end", 120.0),
+                          ("use_volumetric_shadows", True), ("volumetric_shadow_samples", 32)):
             if hasattr(ee, attr):
                 try:
                     setattr(ee, attr, val)

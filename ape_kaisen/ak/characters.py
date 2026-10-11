@@ -46,7 +46,9 @@ def tint_for(color_hex):
 
 
 def make(tag, col, fur_key=None):
-    return C.build_ape(tag, tint_for(FUR[fur_key or tag]), col)
+    ape = C.build_ape(tag, tint_for(FUR[fur_key or tag]), col)
+    ape.mat.diffuse_color = (*hex_to_linear(FUR[fur_key or tag]), 1.0)     # solid/workbench viewport colour
+    return ape
 
 
 # ----------------------------------------------------------------- Gojo's blindfold

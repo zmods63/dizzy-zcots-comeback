@@ -45,10 +45,13 @@ def finish(scene, path, exposure):
 def fresh_file():
     """New empty file; drop module caches that point at datablocks of the previous file."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    from ak import cast as C, mats as M
+    from ak import cast as C, decals as D, kit as K, mats as M, texgen as T
     M._cache.clear()
     C._T.clear()
     C._POLE_ANGLE.clear()
+    K.reset()
+    T.reset()
+    D.reset()
 
 
 def school():
@@ -100,9 +103,60 @@ def hospital():
     finish(scene, os.path.join(HERE, "ape_kaisen_hospital.blend"), exposure=0.6)
 
 
+def props():
+    """Every prop of the new kit (and the user's re-textured models) laid out on a studio floor,
+    each marked as an asset so they show up in Blender's Asset Browser."""
+    fresh_file()
+    scene = bpy.context.scene
+    scene.name = "Props"
+    from ak import assets as A, assets_hosp as AH, kit as K, refassets as RA
+    libs = [("School & Street", A), ("Hospital", AH), ("Your models", RA)]
+    root = U.collection("Props", scene.collection)
+    y = 0.0
+    for title, lib in libs:
+        col = U.collection(title, root)
+        x, row_d = 0.0, 0.0
+        label = U.text_object("Label_" + title, title, col, size=0.6, align="LEFT")
+        label.location = (-1.0, y - 1.2, 0.01)
+        for name in lib.BUILDERS:
+            me = lib.get(name)
+            lo = Vector(tuple(min(v.co[i] for v in me.vertices) for i in range(3)))
+            hi = Vector(tuple(max(v.co[i] for v in me.vertices) for i in range(3)))
+            size = hi - lo
+            if x + size.x > 40.0:
+                x, y, row_d = 0.0, y + row_d + 1.5, 0.0
+            ob = K.place(me, col, (x - lo.x, y - lo.y, -min(0.0, lo.z)), name=name)
+            ob.asset_mark()
+            ob.asset_data.description = f"Ape Kaisen prop: {name}"
+            tag = U.text_object("Tag_" + name, name, col, size=0.12, align="LEFT")
+            tag.location = (x, y - 0.35, 0.01)
+            x += size.x + 0.8
+            row_d = max(row_d, size.y)
+        y += row_d + 4.0
+    ground = bpy.data.meshes.new("StudioFloor")
+    ground.from_pydata([(-10, -10, 0), (60, -10, 0), (60, y + 10, 0), (-10, y + 10, 0)], [], [(0, 1, 2, 3)])
+    gob = bpy.data.objects.new("StudioFloor", ground)
+    root.objects.link(gob)
+    ground.materials.append(U.principled("StudioFloor", (0.32, 0.33, 0.35), rough=0.8))
+    world = bpy.data.worlds.new("Studio")
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (0.55, 0.62, 0.75, 1)
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.8
+    scene.world = world
+    sun = bpy.data.objects.new("Sun", bpy.data.lights.new("Sun", "SUN"))
+    sun.data.energy, sun.data.angle = 3.5, math.radians(3)
+    sun.rotation_euler = (math.radians(50), 0, math.radians(35))
+    root.objects.link(sun)
+    add_camera(scene, "Cam_Overview", (20, -18, 22), (20, y * 0.4, 0), 24)
+    scene.camera = scene.objects["Cam_Overview"]
+    finish(scene, os.path.join(HERE, "ape_kaisen_props.blend"), exposure=0.0)
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["school", "hospital"]
+    which = sys.argv[1:] or ["school", "hospital", "props"]
     if "school" in which:
         school()
     if "hospital" in which:
         hospital()
+    if "props" in which:
+        props()

@@ -156,22 +156,45 @@ def _strip(bm, uv_layer, path, width):
             loop[uv_layer].uv = uv
 
 
+BOX_W, BOX_D, BOX_H, LID_H = 0.30, 0.18, 0.11, 0.03
+
+
+def _box_parts():
+    from .kit import Surf
+    wood = Surf("wood", "#6E4B2D", "#2F1D0E", rough=0.7, grime=0.45, scale=1.6, name="OldBoxWood")
+    brass = Surf("metal", "#8A7346", rough=0.5, metal=1.0, edge=0.35, grime=0.4, name="OldBrass")
+    return wood, brass
+
+
+def _box_body(a):
+    wood, brass = _box_parts()
+    w, d, hb = BOX_W, BOX_D, BOX_H - LID_H
+    a.box((w, d, hb), (0, 0, hb / 2), wood, bevel=0.005, wobble=0.0015, grain=(1, 0, 0))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            x, y = sx * (w / 2 + 0.001), sy * (d / 2 + 0.001)
+            a.box((0.004, 0.03, 0.03), (x, y - sy * 0.012, 0.016), brass, bevel=0.001)
+            a.box((0.03, 0.004, 0.03), (x - sx * 0.012, y, 0.016), brass, bevel=0.001)
+    a.box((0.03, 0.006, 0.022), (0, -d / 2 - 0.002, hb - 0.012), brass, bevel=0.002)
+
+
+def _box_lid(a):
+    wood, brass = _box_parts()
+    w, d = BOX_W + 0.008, BOX_D + 0.008
+    a.box((w, d, LID_H), (0, 0, LID_H / 2), wood, bevel=0.006, wobble=0.0015, grain=(1, 0, 0))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            a.box((0.035, 0.035, 0.004), (sx * (w / 2 - 0.016), sy * (d / 2 - 0.016), LID_H + 0.001), brass,
+                  bevel=0.001)
+
+
 def make_box(col):
     """Old wooden box (origin at its base centre) with two talisman strips sealing the lid.
     Returns (box, lid, seals): animate seals['burn'] 0 -> 1 and lift/flip the lid."""
-    w, d, h, lid_h = 0.30, 0.18, 0.11, 0.03
-    wood = M.wood("OldBoxWood", light=(0.3, 0.19, 0.11), dark=(0.13, 0.07, 0.04), scale=9.0, rough=0.7)
-    bm = bmesh.new()
-    U.bm_box(bm, (w, d, h - lid_h), (0, 0, (h - lid_h) / 2))
-    box = U.mesh_object("SealedBox", bm, col, mats=[wood])
-    bev = box.modifiers.new("Bevel", "BEVEL")
-    bev.width, bev.segments = 0.004, 2
-    bm = bmesh.new()
-    U.bm_box(bm, (w + 0.008, d + 0.008, lid_h), (0, 0, lid_h / 2))
-    lid = U.mesh_object("SealedBoxLid", bm, col, mats=[wood])
-    bev = lid.modifiers.new("Bevel", "BEVEL")
-    bev.width, bev.segments = 0.004, 2
-    lid.location = (0, 0, h - lid_h)
+    from . import kit as K
+    w, d, h, lid_h = BOX_W, BOX_D, BOX_H, LID_H
+    box = K.place(K.asset("SealedBoxBody", _box_body), col, (0, 0, 0), name="SealedBox")
+    lid = K.place(K.asset("SealedBoxLid", _box_lid), col, (0, 0, h - lid_h), name="SealedBoxLid")
     U.parent_keep(lid, box)
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
