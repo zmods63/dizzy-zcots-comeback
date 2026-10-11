@@ -369,7 +369,7 @@ def reach(cr, f, side, target, bend=(0, 0, 1.0), grip=None):
     """Key one arm so it bends from the shoulder to a world-space target point."""
     arm = cr.arms[side]
     hooks = arm["hooks"]
-    mw = cr.root.matrix_world
+    mw = cr.root.matrix_basis.copy()        # the root is unparented; matrix_world can be stale while keying
     sh = mw @ arm["shoulder"]
     tgt = Vector(target)
     mid = (sh + tgt) / 2 + Vector(bend) * ((tgt - sh).length * 0.28)
@@ -400,10 +400,11 @@ def mouth(cr, f, open_amount):
 
 def look(cr, f, target, spread=0.15):
     """Every eye turns toward a world target (each a bit differently, it's a curse)."""
+    rm = cr.root.matrix_basis.copy()
     for i, (eye, pupil) in enumerate(cr.eyes):
-        e_world = eye.matrix_world.translation
+        e_world = rm @ eye.matrix_basis.translation
         d = (Vector(target) - e_world).normalized()
-        local = (cr.root.matrix_world.to_3x3().inverted() @ d)
+        local = (rm.to_3x3().inverted() @ d)
         q = local.to_track_quat("-Y", "Z")
         jitter = Quaternion((0, 0, 1), spread * math.sin(i * 1.7))
         eye.rotation_mode = "QUATERNION"

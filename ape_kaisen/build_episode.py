@@ -119,6 +119,20 @@ def assemble():
                 t0 = e + (f0 - a)
                 text = f"{who}:  {line}" if who else line
                 text_strip(sed, f"Sub{k:02d}", text, 5 + k % 2, t0, f1 - f0, 40, 0.06, box=True)
+    # sound effects cued by each part (scene["sfx"]: [[frame, name], ...] in the part's frames)
+    import json
+    from ak import sfx as X
+    k = 0
+    for name, segs in where.items():
+        for f, snd in json.loads(bpy.data.scenes[name].get("sfx", "[]")):
+            for a, b, e in segs:
+                if a <= f <= b:
+                    st = sed.strips.new_sound(name=f"SFX_{snd}_{k:03d}", filepath=X.path(snd), channel=8 + k % 6,
+                                              frame_start=e + (f - a))
+                    if st.sound and not st.sound.packed_file:
+                        st.sound.pack()
+                    _set(st, volume=0.8 if snd != "beep" else 0.5)
+                    k += 1
     edit.frame_start, edit.frame_end = 1, start - 1
     ims = edit.render.image_settings
     _set(ims, media_type="VIDEO")

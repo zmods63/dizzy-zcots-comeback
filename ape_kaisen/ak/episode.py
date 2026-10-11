@@ -4,6 +4,7 @@ cameras cut on timeline markers (Blender switches the active camera at each mark
 hospital_part(scene): Yuji visits Grandpa at sunset; his last words; the monitor goes flat.
 """
 
+import json
 import math
 import random
 
@@ -151,12 +152,18 @@ def hospital_part(scene):
     m0, m1 = HOSP_SHOTS["monitor"]
     flat_at = m0 + 52
     sweep, rate = 0.0, 0.4 / FPS          # screen passes per frame (72 bpm)
+    beats = []
     for f in range(1, 601):
         if f > m0:
             rate = max(rate * 0.985, 0.18 / FPS)
+        prev = sweep
         sweep += rate
+        for b in (0.42 / 3, 1.42 / 3, 2.42 / 3):           # the QRS spikes on the 3-beat trace
+            if math.floor(prev - b) < math.floor(sweep - b) and f < flat_at - 10:
+                beats.append([f, "beep"])
         if f % 3 == 0 or f in (1, 600):
             key_prop(ecg, "sweep", f, sweep)
+    scene["sfx"] = json.dumps(beats + [[flat_at - 4, "flatline"]])
     U.set_interpolation(ecg, "LINEAR")
     sk = ecg.data.shape_keys.key_blocks["Flat"]
     sk.value = 0.0
@@ -292,6 +299,13 @@ def school_part(scene):
     curse_climb(ctx)
     yuji_dash(ctx)
     rooftop(ctx)
+    effects(ctx)
+    sh = SCHOOL_SHOTS
+    cues = [(sh["drop"][0] + 36, "thump"), (sh["drop"][0] + 84, "thump"), (sh["window"][0] + 40, "scream"),
+            (sh["gate"][0] + 13, "thump"), (sh["door"][0] + 8, "bang"), (sh["roof"][0] + 56, "thump"),
+            (sh["punch"][0] + 19, "punch"), (sh["punch"][0] + 32, "thump"), (sh["sukuna"][0] + 106, "slash"),
+            (sh["sukuna"][0] + 108, "slash")]
+    scene["sfx"] = json.dumps(sorted([list(c) for c in cues]))
     scene.camera = bpy.data.objects["Cam_Pole"]
     scene.frame_start, scene.frame_end = 1, SCHOOL_SHOTS["sukuna"][1]
     return ctx
@@ -537,7 +551,8 @@ def rooftop(ctx):
     finger = ctx["finger"]
     r0, r1 = SCHOOL_SHOTS["roof"]
     root = cr.root
-    shoulder_z = z + 3.0
+    root.location = (-3.0, 0.6, z)                 # its rooftop pose (reach/look read these values)
+    root.rotation_euler = (0, 0, PI / 2)
     # Sasaki dangles from the curse's right hand; Iguchi lies hurt on the deck
     hold_pt = Vector((-1.6, 0.0, z + 2.4))
 
@@ -597,6 +612,7 @@ def rooftop(ctx):
             d.shape(f + 6, "MouthOpen", 0.1)
         dogs[tag] = d
         show(ape_objs(cast[tag]), [(r0 + 41, 99999)])
+    ctx["dogs"] = dogs
     show(ape_objs(cast["Megumi"]), [(0, SCHOOL_SHOTS["drop"][1]), (r0, 99999)])
 
     # the door bursts open, Yuji gallops out
@@ -639,7 +655,7 @@ def rooftop(ctx):
     flash(scene, p0 + 19)
     # Sasaki is dropped, the finger falls out of his grip onto the deck
     drop_from = hold_pt
-    land = Vector((-1.2, -0.9, z))
+    land = Vector((-0.6, -2.2, z))          # clear of the curse when it lunges later
     CU.reach(cr, p0 + 20, "R", hold_pt + Vector((0.2, -0.3, 0.6)), bend=(0.4, -0.3, 0.5), grip=0.0)
     CU.reach(cr, p0 + 34, "R", hold_pt + Vector((-0.4, -0.2, 0.9)), bend=(0.4, -0.3, 0.5), grip=0.2)
     sas.ground = z
@@ -775,6 +791,23 @@ def rooftop(ctx):
     drift(cx, k0 + 96, k1, (4.0, -6.5, z + 2.2), (-2.0, 0.4, z + 1.8), (4.8, -7.4, z + 2.6), (-1.5, 0.4, z + 1.6),
           shake=0.004, seed=8)
     cut(scene, k0 + 96, cx)
+
+
+def effects(ctx):
+    """Dust at every palm slam and landing, the finger's cursed glow, Sukuna's slash."""
+    from . import vfx as V
+    scene = ctx["scene"]
+    fx = U.collection("FX", scene.collection)
+    impacts = list(ctx["meg"].impacts) + list(ctx["yuji"].impacts)
+    for d in ctx.get("dogs", {}).values():
+        impacts += [(f, p, s * 0.6) for f, p, s in d.impacts]
+    V.dust(fx, impacts)
+    f0 = SCHOOL_SHOTS["finger"][0]
+    V.glow_sphere(fx, ctx["finger"], 0.1, (1.0, 0.06, 0.03),
+                  [(0, 0.0), (f0, 0.0), (f0 + 12, 0.8), (f0 + 22, 0.25), (f0 + 34, 1.0), (f0 + 46, 0.35), (f0 + 58, 1.3)])
+    k0 = SCHOOL_SHOTS["sukuna"][0]
+    V.slash(fx, k0 + 106, Vector((-2.4, 0.4, S.ROOF_Z + 2.0)), (1.0, -0.2, 0.35), radius=2.0, name="SukunaSlash")
+    V.slash(fx, k0 + 107, Vector((-2.6, 0.5, S.ROOF_Z + 1.2)), (1.0, 0.3, -0.25), radius=1.7, name="SukunaSlash2")
 
 
 def shadow_puddle(scene, loc):

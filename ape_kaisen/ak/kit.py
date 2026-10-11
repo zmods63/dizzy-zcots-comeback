@@ -458,8 +458,9 @@ class Asset:
 
     def _unwrap(self, ob, me, res):
         vl = bpy.context.view_layer
-        for o in vl.objects.selected:
-            o.select_set(False)
+        for o in list(vl.objects.selected):
+            if o is not None:                  # removed objects (e.g. after an FBX import) linger as None
+                o.select_set(False)
         vl.objects.active = ob
         ob.select_set(True)
         bpy.ops.object.mode_set(mode="EDIT")
@@ -597,8 +598,9 @@ class Asset:
             nodes.append((n, s.baked))
         for i, m in enumerate(mats):
             me.materials[i] = m
-        for o in bpy.context.view_layer.objects.selected:
-            o.select_set(False)
+        for o in list(bpy.context.view_layer.objects.selected):
+            if o is not None:
+                o.select_set(False)
         bpy.context.view_layer.objects.active = ob
         ob.select_set(True)
         for img, kind, samples in ((img_c, "EMIT", 16), (img_n, "NORMAL", 4)):
