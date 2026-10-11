@@ -4,7 +4,7 @@ Two parts:
 
 | Folder | Needs a game update? | What it does |
 |---|---|---|
-| `legacy-cloudscript/` | **No** - server only, use it now | Catches cheats by their *effects* (impossible currency, stats, forbidden items), reverts the gain, bans, tags `ac_cheater`, posts name + PlayFab ID to Discord |
+| `legacy-cloudscript/` | **No** - server only, use it now | Bans blocked PlayFab IDs and non-moderators who own staff cosmetics or impossible coins/stats (moderators may hold up to 1M coins). Revokes items, wipes coins, bans, tags `ac_cheater`, posts name + PlayFab ID to Discord |
 | `cloudscript/` + `unity/` | **Yes** - next client update | Real device attestation (Google Play Integrity / Meta Quest). Blocks rooted devices and re-signed APKs (Frida gadget), escalating bans, shadowban lag, Photon room kicks, Discord alerts |
 
 > No server script can see Frida or root on its own. The device has to send an attestation
@@ -25,22 +25,38 @@ Two parts:
      {
        "dryRun": true,
        "banHours": null,
-       "revert": true,
-       "currencyCaps":    { "BN": 50000 },
-       "maxCurrencyGain": { "BN": 1000 },
-       "statCaps":        { "Tags": 100000 },
-       "maxStatJump":     { "Tags": 50 },
-       "forbiddenItems":  ["admin_badge", "dev_hat"]
+       "wipeCurrency": true,
+       "moderators":     ["MOD_PLAYFAB_ID_1", "MOD_PLAYFAB_ID_2"],
+       "modCurrencyCap": 1000000,
+       "bannedIds":      ["CHEATER_PLAYFAB_ID"],
+       "forbiddenItems": ["mod_badge", "dev_hat"],
+       "currencyCaps":    { "CO": 100000 },
+       "maxCurrencyGain": { "CO": 5000 },
+       "statCaps": {}, "maxStatJump": {}
      }
      ```
-     `banHours: null` = permanent. Use your real currency codes, stat names and item IDs.
-     Leave `maxCurrencyGain` above anything a real purchase can grant.
+   - `banHours: null` = permanent.
+   - `forbiddenItems` = staff-only cosmetics. Anyone not in `moderators` who owns one is caught.
+   - `moderators` may own them and hold up to `modCurrencyCap` coins. A moderator over that cap
+     gets the extra coins removed and a Discord alert, but is never banned.
+   - `bannedIds` = PlayFab IDs to kick and ban.
+   - Use your real currency code, item IDs and stat names. Leave `maxCurrencyGain` above anything
+     a real purchase can grant.
 3. **Automation > Rules**, one rule per event, action **Execute CloudScript**:
+   - `com.playfab.player_logged_in` -> `AC_OnLogin` (checks blocked ID, staff cosmetics and coins at every login)
    - `com.playfab.player_virtual_currency_balance_changed` -> `AC_OnCurrencyChanged`
    - `com.playfab.player_statistic_changed` -> `AC_OnStatisticChanged`
    - `com.playfab.player_inventory_item_added` -> `AC_OnItemAdded`
-4. Run with `"dryRun": true` for a day. Discord shows "DRY RUN" hits; nobody is punished.
+4. **Automation > Scheduled Tasks**: new task, type *Execute CloudScript*, function
+   `AC_SweepBlockedIds`, every hour. Click *Run now* after you add IDs to `bannedIds`, to ban them
+   right away even if they're online. Each run handles 5 IDs.
+5. Run with `"dryRun": true` for a day. Discord shows "DRY RUN" hits; nobody is punished.
    When the hits are all real cheaters, set `"dryRun": false`.
+
+When someone is caught: staff cosmetics revoked, all coins wiped, permanent ban (their PlayFab
+calls fail right away), tagged `ac_cheater`, PlayStream `ac_violation` event, and a Discord post
+with their name and PlayFab ID. A ban can't pull them out of the Photon room they're already in.
+If Photon uses PlayFab auth, they can't connect again. A true instant room kick needs a client update.
 
 ### Zero-code lockdown (do this now, biggest win)
 - **Title Settings > API Features**: turn off *Allow client to add virtual currency*,
