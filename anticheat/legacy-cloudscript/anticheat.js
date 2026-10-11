@@ -1,3 +1,113 @@
+var DEV_IDS = [
+    "9FBA69E54512E748"
+];
+
+var DEV_ITEM = "XenaDevMenu";
+var MAX_GIFT = 1000000;
+
+function ownsDevMenu(playFabId) {
+    var inv = server.GetUserInventory({ PlayFabId: playFabId });
+    if (!inv || !inv.Inventory) return false;
+    for (var i = 0; i < inv.Inventory.length; i++) {
+        if (inv.Inventory[i].ItemId === DEV_ITEM) return true;
+    }
+    return false;
+}
+
+function isDev(playFabId) {
+    return DEV_IDS.indexOf(playFabId) >= 0 || ownsDevMenu(playFabId);
+}
+
+handlers.devGrantItem = function (args, context) {
+    if (DEV_IDS.indexOf(currentPlayerId) < 0) {
+        return { ok: false, error: "Not a dev account" };
+    }
+    if (!args || !args.itemId) {
+        return { ok: false, error: "Missing itemId" };
+    }
+
+    var request = { PlayFabId: currentPlayerId, ItemIds: [args.itemId] };
+    if (args.catalogVersion) request.CatalogVersion = args.catalogVersion;
+
+    var result = server.GrantItemsToUser(request);
+    var granted = result.ItemGrantResults && result.ItemGrantResults.length > 0 && result.ItemGrantResults[0].Result;
+    return { ok: !!granted, itemId: args.itemId };
+};
+
+handlers.devGiveItem = function (args, context) {
+    if (!isDev(currentPlayerId)) {
+        return { ok: false, error: "You don't own the dev menu" };
+    }
+    if (!args || !args.target || !args.itemId) {
+        return { ok: false, error: "Missing target or itemId" };
+    }
+    if (String(args.itemId) === DEV_ITEM) {
+        return { ok: false, error: "The dev menu can't be gifted" };
+    }
+    if (acBlocksGift(String(args.target), String(args.itemId))) {
+        return { ok: false, error: "That item is staff-only, the anti-cheat would ban this player for owning it" };
+    }
+
+    var request = { PlayFabId: String(args.target), ItemIds: [String(args.itemId)] };
+    if (args.catalogVersion) request.CatalogVersion = String(args.catalogVersion);
+    var result = server.GrantItemsToUser(request);
+    var granted = result.ItemGrantResults && result.ItemGrantResults.length > 0 && result.ItemGrantResults[0].Result;
+    log.info("devGiveItem " + currentPlayerId + " -> " + args.target + " " + args.itemId);
+    return { ok: !!granted, error: granted ? undefined : "PlayFab refused the grant" };
+};
+
+handlers.devBanPlayer = function (args, context) {
+    if (!isDev(currentPlayerId)) {
+        return { ok: false, error: "You don't own the dev menu" };
+    }
+    if (!args || !args.target) {
+        return { ok: false, error: "Missing target" };
+    }
+    var target = String(args.target);
+    if (target === currentPlayerId) {
+        return { ok: false, error: "You can't ban yourself" };
+    }
+    if (isDev(target)) {
+        return { ok: false, error: "You can't ban another dev" };
+    }
+    var hours = parseInt(args.hours, 10);
+    var ban = { PlayFabId: target, Reason: String(args.reason || "Banned by a developer").substring(0, 140) };
+    if (hours > 0) ban.DurationInHours = hours;
+    server.BanUsers({ Bans: [ban] });
+    log.info("devBanPlayer " + currentPlayerId + " -> " + target + " hours=" + (hours > 0 ? hours : "forever"));
+    return { ok: true };
+};
+
+handlers.devUnbanPlayer = function (args, context) {
+    if (!isDev(currentPlayerId)) {
+        return { ok: false, error: "You don't own the dev menu" };
+    }
+    if (!args || !args.target) {
+        return { ok: false, error: "Missing target" };
+    }
+    server.RevokeAllBansForUser({ PlayFabId: String(args.target) });
+    log.info("devUnbanPlayer " + currentPlayerId + " -> " + args.target);
+    return { ok: true };
+};
+
+handlers.devGiveCurrency = function (args, context) {
+    if (!isDev(currentPlayerId)) {
+        return { ok: false, error: "You don't own the dev menu" };
+    }
+    if (!args || !args.target || !args.currency) {
+        return { ok: false, error: "Missing target or currency" };
+    }
+    var amount = parseInt(args.amount, 10);
+    if (!amount || Math.abs(amount) > MAX_GIFT) {
+        return { ok: false, error: "Amount must be between 1 and " + MAX_GIFT };
+    }
+
+    var request = { PlayFabId: String(args.target), VirtualCurrency: String(args.currency), Amount: Math.abs(amount) };
+    var result = amount > 0 ? server.AddUserVirtualCurrency(request) : server.SubtractUserVirtualCurrency(request);
+    log.info("devGiveCurrency " + currentPlayerId + " -> " + args.target + " " + amount + " " + args.currency);
+    return { ok: true, balance: result.Balance };
+};
+
 var AC_DEFAULTS = {
   dryRun: true,
   banHours: null,
@@ -22,8 +132,19 @@ function acConfig() {
   return cfg;
 }
 
-function acIsMod(cfg, id) {
-  return cfg.moderators.indexOf(id) !== -1;
+function acIsMod(cfg, id, items) {
+  if (DEV_IDS.indexOf(id) !== -1 || cfg.moderators.indexOf(id) !== -1) return true;
+  if (cfg.forbiddenItems.indexOf(DEV_ITEM) !== -1) return false;
+  if (!items) items = server.GetUserInventory({ PlayFabId: id }).Inventory || [];
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].ItemId === DEV_ITEM) return true;
+  }
+  return false;
+}
+
+function acBlocksGift(target, itemId) {
+  var cfg = acConfig();
+  return cfg.forbiddenItems.indexOf(itemId) !== -1 && !acIsMod(cfg, target);
 }
 
 function acIsBlocked(cfg, id) {
@@ -120,7 +241,7 @@ function acCheckPlayer(cfg, id) {
   var inv = server.GetUserInventory({ PlayFabId: id });
   var items = inv.Inventory || [];
   var balances = inv.VirtualCurrency || {};
-  var isMod = acIsMod(cfg, id);
+  var isMod = acIsMod(cfg, id, items);
   var reasons = [];
 
   if (acIsBlocked(cfg, id)) reasons.push("blocked PlayFab ID");
@@ -220,7 +341,7 @@ handlers.AC_OnItemAdded = function (args, context) {
   var cfg = acConfig();
   var id = acPlayerId(context);
   if (acIsBlocked(cfg, id)) return acCheckPlayer(cfg, id);
-  if (acIsMod(cfg, id) || cfg.forbiddenItems.indexOf(ev.ItemId) === -1) return { ok: true };
+  if (cfg.forbiddenItems.indexOf(ev.ItemId) === -1 || acIsMod(cfg, id)) return { ok: true };
   return acPunish(cfg, id, "staff_cosmetic", "got " + ev.ItemId + " (" + (ev.DisplayName || "") + ")",
     ev.InstanceId ? function () {
       server.RevokeInventoryItem({ PlayFabId: id, ItemInstanceId: ev.InstanceId });

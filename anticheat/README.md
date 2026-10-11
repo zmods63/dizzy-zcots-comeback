@@ -15,9 +15,12 @@ Two parts:
 
 ## 1. Server-only (works today): `legacy-cloudscript/anticheat.js`
 
-1. **Game Manager > Automation > CloudScript > Revisions (Legacy)**: add `anticheat.js` to your
-   current revision (or paste it at the bottom of your existing script). Do **not** replace your
-   existing script, or every handler you already have stops working. Deploy the revision.
+1. **Game Manager > Automation > CloudScript > Revisions (Legacy)**: `anticheat.js` already contains
+   the dev menu handlers (`devGrantItem`, `devGiveItem`, `devBanPlayer`, `devUnbanPlayer`,
+   `devGiveCurrency`). Replace the dev menu code with it. Keep any other handlers you have. Deploy the revision.
+   - `DEV_IDS` and anyone who owns `XenaDevMenu` count as moderators. Put `XenaDevMenu` in
+     `forbiddenItems` to lock it, so only `DEV_IDS` and `moderators` may own it.
+   - `devGiveItem` refuses to gift a staff-only item to a non-moderator, because the anti-cheat would ban them.
 2. **Title Settings > Title Internal Data** (server-only, players can't read it):
    - `ac_discord_webhook` = your Discord webhook URL. Keep it here, not in code or git.
    - `ac_config` = JSON, e.g.
