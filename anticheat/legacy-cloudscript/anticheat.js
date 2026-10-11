@@ -5,11 +5,8 @@ var AC_DEFAULTS = {
   wipeCurrency: true,
   tag: "ac_cheater",
   moderators: [],
-  modCurrencyCap: 1000000,
   bannedIds: [],
   forbiddenItems: [],
-  currencyCaps: {},
-  maxCurrencyGain: {},
   statCaps: {},
   maxStatJump: {}
 };
@@ -114,17 +111,6 @@ function acPunish(cfg, playFabId, kind, detail, undo, balances) {
   return { violation: kind, detail: detail, actions: actions };
 }
 
-function acModAlert(cfg, playFabId, kind, detail, actions) {
-  acDiscord(cfg, "Moderator account over limit (not banned)", 16096779, [
-    { name: "Name", value: acEscape(acDisplayName(playFabId), 100), inline: true },
-    { name: "PlayFab ID", value: acEscape(playFabId, 32), inline: true },
-    { name: "Issue", value: acEscape(kind, 50), inline: true },
-    { name: "Action", value: acEscape(actions.join(", ") || "none", 300) },
-    { name: "Details", value: acEscape(detail, 1000) }
-  ]);
-  return { modAlert: kind, detail: detail, actions: actions };
-}
-
 function acPlayerId(context) {
   var ev = context && context.playStreamEvent;
   return (ev && ev.EntityId) || currentPlayerId;
@@ -147,30 +133,10 @@ function acCheckPlayer(cfg, id) {
   }
   if (bad.length) reasons.push("owns staff-only cosmetic: " + bad.map(function (x) { return x.ItemId; }).join(", "));
 
-  var over = [];
-  for (var code in balances) {
-    var cap = isMod ? cfg.modCurrencyCap : cfg.currencyCaps[code];
-    if (cap !== undefined && cap !== null && balances[code] > cap) over.push({ code: code, amount: balances[code], cap: cap });
-  }
-
-  if (isMod && !reasons.length) {
-    if (!over.length) return { ok: true, moderator: true };
-    var modActions = [];
-    if (!cfg.dryRun && cfg.revert) {
-      over.forEach(function (o) {
-        server.SubtractUserVirtualCurrency({ PlayFabId: id, VirtualCurrency: o.code, Amount: o.amount - o.cap });
-        modActions.push(o.code + " trimmed to " + o.cap);
-      });
-    }
-    return acModAlert(cfg, id, "mod_currency_over_cap",
-      over.map(function (o) { return o.code + " " + o.amount + " > " + o.cap; }).join(", "), modActions);
-  }
-
-  if (over.length) reasons.push("coins over cap: " + over.map(function (o) { return o.code + " " + o.amount + " > " + o.cap; }).join(", "));
-  if (!reasons.length) return { ok: true };
+  if (!reasons.length) return isMod ? { ok: true, moderator: true } : { ok: true };
 
   var detail = reasons.join(" | ");
-  var kind = acIsBlocked(cfg, id) ? "blocked_id" : bad.length ? "staff_cosmetic" : "currency_over_cap";
+  var kind = acIsBlocked(cfg, id) ? "blocked_id" : "staff_cosmetic";
   return acPunish(cfg, id, kind, detail, function () {
     if (!bad.length) return null;
     server.RevokeInventoryItems({
@@ -224,43 +190,6 @@ handlers.AC_SweepBlockedIds = function (args, context) {
     wouldBan: cfg.dryRun ? todo : [],
     remaining: cfg.bannedIds.filter(function (id) { return !done[id]; }).length
   };
-};
-
-handlers.AC_OnCurrencyChanged = function (args, context) {
-  var ev = context.playStreamEvent || {};
-  var code = ev.VirtualCurrencyName;
-  var balance = Number(ev.VirtualCurrencyBalance);
-  var previous = Number(ev.VirtualCurrencyPreviousBalance);
-  if (!code || isNaN(balance)) return { skipped: "unexpected event" };
-  var cfg = acConfig();
-  var id = acPlayerId(context);
-  if (acIsBlocked(cfg, id)) return acCheckPlayer(cfg, id);
-  var gain = isNaN(previous) ? 0 : balance - previous;
-
-  if (acIsMod(cfg, id)) {
-    if (balance <= cfg.modCurrencyCap) return { ok: true, moderator: true };
-    var modActions = [];
-    if (!cfg.dryRun && cfg.revert) {
-      server.SubtractUserVirtualCurrency({ PlayFabId: id, VirtualCurrency: code, Amount: balance - cfg.modCurrencyCap });
-      modActions.push(code + " trimmed to " + cfg.modCurrencyCap);
-    }
-    return acModAlert(cfg, id, "mod_currency_over_cap", code + " " + balance + " > " + cfg.modCurrencyCap, modActions);
-  }
-
-  var cap = cfg.currencyCaps[code];
-  if (cap !== undefined && balance > cap) {
-    var target = isNaN(previous) ? cap : Math.min(previous, cap);
-    return acPunish(cfg, id, "currency_over_cap",
-      code + " balance " + balance + " > cap " + cap,
-      function () { server.SubtractUserVirtualCurrency({ PlayFabId: id, VirtualCurrency: code, Amount: balance - target }); return "removed " + (balance - target) + " " + code; });
-  }
-  var maxGain = cfg.maxCurrencyGain[code];
-  if (maxGain !== undefined && gain > maxGain) {
-    return acPunish(cfg, id, "currency_gain_too_big",
-      code + " +" + gain + " in one change (max " + maxGain + ")",
-      function () { server.SubtractUserVirtualCurrency({ PlayFabId: id, VirtualCurrency: code, Amount: gain }); return "removed " + gain + " " + code; });
-  }
-  return { ok: true };
 };
 
 handlers.AC_OnStatisticChanged = function (args, context) {

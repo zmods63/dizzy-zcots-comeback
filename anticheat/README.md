@@ -4,7 +4,7 @@ Two parts:
 
 | Folder | Needs a game update? | What it does |
 |---|---|---|
-| `legacy-cloudscript/` | **No** - server only, use it now | Bans blocked PlayFab IDs and non-moderators who own staff cosmetics or impossible coins/stats (moderators may hold up to 1M coins). Revokes items, wipes coins, bans, tags `ac_cheater`, posts name + PlayFab ID to Discord |
+| `legacy-cloudscript/` | **No** - server only, use it now | Bans blocked PlayFab IDs and non-moderators who own staff-only cosmetics. Revokes items, wipes coins, bans, tags `ac_cheater`, posts name + PlayFab ID to Discord |
 | `cloudscript/` + `unity/` | **Yes** - next client update | Real device attestation (Google Play Integrity / Meta Quest). Blocks rooted devices and re-signed APKs (Frida gadget), escalating bans, shadowban lag, Photon room kicks, Discord alerts |
 
 > No server script can see Frida or root on its own. The device has to send an attestation
@@ -27,25 +27,17 @@ Two parts:
        "banHours": null,
        "wipeCurrency": true,
        "moderators":     ["MOD_PLAYFAB_ID_1", "MOD_PLAYFAB_ID_2"],
-       "modCurrencyCap": 1000000,
        "bannedIds":      ["CHEATER_PLAYFAB_ID"],
-       "forbiddenItems": ["mod_badge", "dev_hat"],
-       "currencyCaps":    { "CO": 100000 },
-       "maxCurrencyGain": { "CO": 5000 },
-       "statCaps": {}, "maxStatJump": {}
+       "forbiddenItems": ["mod_badge", "dev_hat"]
      }
      ```
    - `banHours: null` = permanent.
    - `forbiddenItems` = staff-only cosmetics. Anyone not in `moderators` who owns one is caught.
-   - `moderators` may own them and hold up to `modCurrencyCap` coins. A moderator over that cap
-     gets the extra coins removed and a Discord alert, but is never banned.
+   - `moderators` may own them and are never checked.
    - `bannedIds` = PlayFab IDs to kick and ban.
-   - Use your real currency code, item IDs and stat names. Leave `maxCurrencyGain` above anything
-     a real purchase can grant.
+   - Coins are never checked. `"wipeCurrency": false` also keeps a banned cheater's coins.
 3. **Automation > Rules**, one rule per event, action **Execute CloudScript**:
-   - `com.playfab.player_logged_in` -> `AC_OnLogin` (checks blocked ID, staff cosmetics and coins at every login)
-   - `com.playfab.player_virtual_currency_balance_changed` -> `AC_OnCurrencyChanged`
-   - `com.playfab.player_statistic_changed` -> `AC_OnStatisticChanged`
+   - `com.playfab.player_logged_in` -> `AC_OnLogin` (checks blocked ID and staff cosmetics at every login)
    - `com.playfab.player_inventory_item_added` -> `AC_OnItemAdded`
 4. **Automation > Scheduled Tasks**: new task, type *Execute CloudScript*, function
    `AC_SweepBlockedIds`, every hour. Click *Run now* after you add IDs to `bannedIds`, to ban them
